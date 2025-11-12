@@ -11,22 +11,27 @@ namespace Retail.CouponEngine
     {
         private readonly ILogger<CouponEngineWorker> _logger;
         private readonly IConsumer<string, string> _consumer;
+        private readonly IProducer<string, string> _producer; // <-- 1. Aggiungi producer
         private readonly RedisStateStore _stateStore; // <-- USA IL NUOVO STATE STORE
         private readonly decimal _spendingThreshold;
         private readonly int _timeWindowDays;
+        private readonly string _couponTopicName; // <-- 2. Aggiungi nome topic
 
         // Inietta il nuovo RedisStateStore tramite il costruttore
         public CouponEngineWorker(
             ILogger<CouponEngineWorker> logger, 
             IConfiguration configuration, 
-            RedisStateStore stateStore)
+            RedisStateStore stateStore,
+            IProducer<string, string> producer) // <-- 3. Inietta producer
         {
             _logger = logger;
-            _stateStore = stateStore;  
+            _stateStore = stateStore;
+            _producer = producer; // <-- 4. Assegna producer
 
             var topic = configuration["Kafka:TopicName"];
+            var couponTopicName = configuration["Kafka:TopicNameCouponGenerati"]!; // <-- 5. Leggi nome topic output
 
-            // Carica la configurazione
+            // Carica la configurazione del consumer Kafka
             var kafkaConfig = new ConsumerConfig
             {
                 BootstrapServers = configuration["Kafka:BootstrapServers"],
@@ -76,8 +81,24 @@ namespace Retail.CouponEngine
 
                         //TODO ... logica per generare il coupon  
 
-                        _logger.LogInformation($"Coupon generato per il Cliente {loyaltyEvent.IdCarta} " +
-                            $"con spesa totale: {totaleSpesa:C}.");
+                        // 1. Simula la generazione del coupon
+                        var couponCode = $"WELCOME20-{Guid.NewGuid().ToString().Substring(0, 5).ToUpper()}";
+                        var couponEvent = new CouponGeneratedEvent
+                        {
+                            IdCarta = loyaltyEvent.IdCarta,
+                            CodiceCoupon = couponCode,
+                            Descrizione = "Sconto 20% sul prossimo acquisto",
+                            DataScadenza = DateTime.UtcNow.AddDays(30),
+                            Timestamp = DateTime.UtcNow
+                        };
+
+                        // 2. Serializza e pubblica sul nuovo topic
+                        var eventJson = JsonSerializer.Serialize(couponEvent);
+                        await _producer.ProduceAsync(_couponTopicName,
+                            new Message<string, string> { Key = couponEvent.IdCarta, Value = eventJson },
+                            stoppingToken);
+
+                        _logger.LogInformation($"Coupon generato e pubblicato su '{_couponTopicName}' per il Cliente {loyaltyEvent.IdCarta}");
 
                         _logger.LogInformation($"Eliminazione dei dati del cliente {loyaltyEvent.IdCarta} da Redis.");
                         await _stateStore.DeleteCustomerDataAsync(loyaltyEvent.IdCarta);

@@ -1,3 +1,4 @@
+using Confluent.Kafka;
 using Retail.CouponEngine;
 using Serilog;
 using StackExchange.Redis;
@@ -16,6 +17,18 @@ IHost host = Host.CreateDefaultBuilder(args)
 
         // Registra il nostro nuovo State Store
         services.AddSingleton<RedisStateStore>();
+
+        // --- INIZIO MODIFICA: Registra il Producer Kafka ---
+        var producerConfig = new ProducerConfig
+        {
+            BootstrapServers = hostContext.Configuration["Kafka:BootstrapServers"]
+        };
+
+        // Registra il Producer Kafka come Singleton
+        services.AddSingleton<IProducer<string, string>>(
+            _ => new ProducerBuilder<string, string>(producerConfig).Build()
+        );
+        // --- FINE MODIFICA ---
 
         // Registra il Coupon Engine Worker come Hosted Service
         services.AddHostedService<CouponEngineWorker>();
