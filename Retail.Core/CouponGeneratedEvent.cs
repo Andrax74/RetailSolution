@@ -28,6 +28,9 @@ namespace Retail.Core
         /// </summary>
         public DateTime Timestamp { get; set; }
 
+        /// <summary>
+        /// Data di scadenza del coupon.
+        /// </summary>
         public DateTime DataScadenza { get; set; }
 
         /// <summary>

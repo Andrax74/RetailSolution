@@ -5,6 +5,10 @@ using System.Text.Json;
 
 namespace Retail.NotificationService
 {
+    /// <summary>
+    /// Worker di background che consuma messaggi Kafka per notifiche.
+    /// Gestisce eventi di coupon e allarmi di frode, inviando email e SMS.
+    /// </summary>
     public class NotificationWorker : BackgroundService
     {
         private readonly ILogger<NotificationWorker> _logger;
@@ -29,17 +33,20 @@ namespace Retail.NotificationService
             ISmsService smsService,
             ICustomerRepository customerRepository)
         {
+            // Validazioni degli argomenti
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _emailService = emailService ?? throw new ArgumentNullException(nameof(emailService));
             _smsService = smsService ?? throw new ArgumentNullException(nameof(smsService));
             _customerRepository = customerRepository ?? throw new ArgumentNullException(nameof(customerRepository));
 
+            // Legge la configurazione Kafka
             var bootstrap = _configuration["Kafka:BootstrapServers"];
             var groupId = _configuration["Kafka:GroupId"];
             _couponsTopic = _configuration["Kafka:TopicNameCoupons"];
             _alertsTopic = _configuration["Kafka:TopicNameAlerts"];
 
+            // Validazioni di base
             if (string.IsNullOrWhiteSpace(bootstrap))
                 throw new InvalidOperationException("Kafka:BootstrapServers non configurato.");
             if (string.IsNullOrWhiteSpace(groupId))
@@ -58,6 +65,7 @@ namespace Retail.NotificationService
                 SocketKeepaliveEnable = true
             };
 
+            // Crea il consumer Kafka
             _consumer = new ConsumerBuilder<string, string>(kafkaConfig)
                 .SetErrorHandler((_, e) => _logger.LogError("Kafka consumer error: {Reason}", e.Reason))
                 .SetLogHandler((_, logMessage) => _logger.LogDebug("Kafka log: {Message}", logMessage.Message))
@@ -65,9 +73,12 @@ namespace Retail.NotificationService
 
             // Sottoscrizione al/ai topic (se presenti)
             var topics = new System.Collections.Generic.List<string>();
-            if (!string.IsNullOrWhiteSpace(_couponsTopic)) topics.Add(_couponsTopic);
-            if (!string.IsNullOrWhiteSpace(_alertsTopic)) topics.Add(_alertsTopic);
+            if (!string.IsNullOrWhiteSpace(_couponsTopic)) 
+                topics.Add(_couponsTopic);
+            if (!string.IsNullOrWhiteSpace(_alertsTopic)) 
+                topics.Add(_alertsTopic);
 
+            // Sottoscrive ai topic
             _consumer.Subscribe(topics);
         }
 
@@ -82,10 +93,14 @@ namespace Retail.NotificationService
                 {
                     try
                     {
+                        // Consuma un messaggio (bloccante con token di cancellazione)
                         var consumeResult = _consumer.Consume(stoppingToken);
+
+                        // Controllo nullo (teoricamente non dovrebbe accadere con il token di cancellazione)
                         if (consumeResult == null)
                             continue;
 
+                        // Controllo Message nullo
                         if (consumeResult.Message == null)
                         {
                             _logger.LogWarning("ConsumeResult.Message nullo per offset {Offset} sul topic {Topic}.",
@@ -98,14 +113,16 @@ namespace Retail.NotificationService
                         bool processedSuccessfully = false;
 
                         try
-                        {
+                        {   // Gestione del messaggio in base al topic
                             if (topic == _couponsTopic)
                             {
-                                processedSuccessfully = await SafeHandle(() => HandleCouponEventAsync(consumeResult.Message.Value), "HandleCouponEvent");
+                                processedSuccessfully = await SafeHandle(() => 
+                                    HandleCouponEventAsync(consumeResult.Message.Value), "HandleCouponEvent");
                             }
                             else if (topic == _alertsTopic)
                             {
-                                processedSuccessfully = await SafeHandle(() => HandleAlertEventAsync(consumeResult.Message.Value), "HandleAlertEvent");
+                                processedSuccessfully = await SafeHandle(() => 
+                                    HandleAlertEventAsync(consumeResult.Message.Value), "HandleAlertEvent");
                             }
                             else
                             {
@@ -187,6 +204,7 @@ namespace Retail.NotificationService
             }
         }
 
+        // Gestione evento coupon
         private async Task HandleCouponEventAsync(string messageValue)
         {
             if (string.IsNullOrWhiteSpace(messageValue))
@@ -196,6 +214,7 @@ namespace Retail.NotificationService
             }
 
             CouponGeneratedEvent? couponEvent;
+
             try
             {
                 couponEvent = JsonSerializer.Deserialize<CouponGeneratedEvent>(messageValue, _jsonOptions);
@@ -245,6 +264,7 @@ namespace Retail.NotificationService
             }
         }
 
+        // Gestione evento allarme frode
         private async Task HandleAlertEventAsync(string messageValue)
         {
             if (string.IsNullOrWhiteSpace(messageValue))
@@ -310,9 +330,11 @@ namespace Retail.NotificationService
             }
         }
 
+        // Helper per anteprima stringa
         private static string Preview(string s, int max = 200) =>
             string.IsNullOrEmpty(s) ? string.Empty : (s.Length <= max ? s : s.Substring(0, max) + "...");
 
+        // Cleanup risorse
         public override void Dispose()
         {
             try
@@ -330,6 +352,7 @@ namespace Retail.NotificationService
             }
         }
 
+        // Log di stop 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("NotificationWorker stopping...");

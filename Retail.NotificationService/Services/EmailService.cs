@@ -15,6 +15,9 @@ namespace Retail.NotificationService.Services
             string body, bool isHtml = true, CancellationToken cancellationToken = default);
     }
 
+    /// <summary>
+    /// Servizio per l'invio di email utilizzando SMTP via MailKit.
+    /// </summary>
     public class EmailService : IEmailService
     {
         private readonly SmtpSettings _settings;
@@ -47,7 +50,8 @@ namespace Retail.NotificationService.Services
             // From
             try
             {
-                var fromName = string.IsNullOrWhiteSpace(_settings.FromName) ? _settings.FromAddress : _settings.FromName;
+                var fromName = string.IsNullOrWhiteSpace(_settings.FromName) ? 
+                    _settings.FromAddress : _settings.FromName;
                 
                 if (!MailboxAddress.TryParse(_settings.FromAddress, out var fromAddress))
                 {

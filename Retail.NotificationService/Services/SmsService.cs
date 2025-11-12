@@ -12,6 +12,10 @@ namespace Retail.NotificationService.Services
         Task SendSmsAsync(string toNumber, string message);
     }
 
+    /// <summary>
+    /// Servizio per l'invio di SMS utilizzando un provider esterno.
+    /// Questa è una implementazione fittizia che simula l'invio.
+    /// </summary>
     public class SmsService : ISmsService
     {
         private readonly SmsSettings _settings;
@@ -19,11 +23,11 @@ namespace Retail.NotificationService.Services
         private readonly ILogger<SmsService> _logger;
 
         public SmsService(
-            IOptions<SmsSettings> settings, // ERRORE CORRETTO: IOptions<SmsSettings>
+            IOptions<SmsSettings> settings, 
             IHttpClientFactory httpClientFactory,
             ILogger<SmsService> logger)
         {
-            _settings = settings.Value; // Qui ora funziona
+            _settings = settings.Value; 
             _httpClientFactory = httpClientFactory;
             _logger = logger;
         }
