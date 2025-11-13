@@ -20,6 +20,9 @@ namespace Retail.FraudDetector
             _logger = logger;
         }
 
+        /// Genera la chiave Redis per una carta fedeltà
+        private string GetKey(string idCarta) => $"fraud_check:{idCarta}";
+
         /// <summary>
         /// Controlla se una transazione è sospetta incrementando un contatore
         /// in una finestra temporale a scorrimento.
@@ -65,6 +68,27 @@ namespace Retail.FraudDetector
                 // In caso di errore, meglio non bloccare (fail-open)
                 return false;
             }
+        }
+
+        /// <summary>
+        /// Recupera il conteggio corrente delle transazioni per una carta.
+        /// </summary>
+        /// <param name="idCarta"></param>
+        /// <returns></returns>
+        public async Task<long> GetCurrentCountAsync(string idCarta)
+        {
+            var key = GetKey(idCarta);
+            // StringGetAsync restituisce una RedisValue.
+            // Se la chiave non esiste, è nulla (IsNullOrEmpty).
+            var value = await _db.StringGetAsync(key);
+
+            if (value.IsNullOrEmpty)
+            {
+                return 0;
+            }
+            
+            // Facciamo il cast a long (INCR lavora con interi a 64bit)
+            return (long)value;
         }
     }
 }

@@ -1,3 +1,4 @@
+using Confluent.Kafka;
 using Retail.FraudDetector;
 using Serilog;
 using StackExchange.Redis;
@@ -17,7 +18,18 @@ var host = Host.CreateDefaultBuilder(args)
         // 2. Registra il nostro store per la logica antifrode
         services.AddSingleton<FraudDetectionStore>();
 
-        // 3. Registra il worker principale
+        // 3. Aggiungiamo il producer come singleton in modo che possa essere
+        // iniettato nel nostro worker.
+        var producerConfig = new ProducerConfig
+        {
+            BootstrapServers = configuration["Kafka:BootstrapServers"]
+        };
+
+        services.AddSingleton<IProducer<string, string>>(
+            _ => new ProducerBuilder<string, string>(producerConfig).Build()
+        );
+
+        // 4. Registra il worker principale
         services.AddHostedService<FraudDetectorWorker>();
 
         services.AddHttpContextAccessor(); 

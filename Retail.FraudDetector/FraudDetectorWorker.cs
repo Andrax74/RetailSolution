@@ -19,14 +19,18 @@ namespace Retail.FraudDetector
         private readonly FraudDetectionStore _store;
         private readonly int _maxTransactions;
         private readonly int _windowSeconds;
+        private readonly IProducer<string, string> _producer;
+        private readonly string _alertsTopicName;
 
         public FraudDetectorWorker(
             ILogger<FraudDetectorWorker> logger,
             IConfiguration configuration,
-            FraudDetectionStore store)
+            FraudDetectionStore store,
+            IProducer<string, string> producer) // <-- 1. Inietta il producer)
         {
             _logger = logger;
             _store = store;
+            _producer = producer; // <-- 2. Assegna il producer
 
             var kafkaConfig = new ConsumerConfig
             {
@@ -71,7 +75,8 @@ namespace Retail.FraudDetector
                         new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
 
-                    if (loyaltyEvent == null) continue;
+                    if (loyaltyEvent == null) 
+                        continue;
 
                     // Controlla la logica antifrode
                     bool isSuspicious = await _store.IsTransactionSuspiciousAsync(
@@ -79,13 +84,35 @@ namespace Retail.FraudDetector
 
                     if (isSuspicious)
                     {
-                        // Azione!
-                        // Per ora logghiamo in modo critico.
-                        // Qui potresti produrre un nuovo evento su un topic "fraud-alerts"
-                        // o chiamare un'API per bloccare la carta.
-                        _logger.LogCritical(
-                            "*** ALLARME FRODE RILEVATO *** Carta: {IdCarta}, Transazione: {IdTransazione}",
-                            loyaltyEvent.IdCarta, loyaltyEvent.IdTransazione);
+                        // 4. Crea l'evento di allarme
+                        var alertEvent = new FraudAlertEvent
+                        {
+                            IdCarta = loyaltyEvent.IdCarta,
+                            IdTransazioneSospetta = loyaltyEvent.IdTransazione ?? "N/D",
+                            TipoAllarme = "HighFrequencyTransaction",
+                            // Usiamo il metodo helper per un messaggio più ricco
+                            Messaggio = $"Rilevate {
+                                await _store.GetCurrentCountAsync(loyaltyEvent.IdCarta)} transazioni in {_windowSeconds} secondi.",
+                            Severita = AlertSeverity.Critical,
+                            TimestampAllarme = DateTime.UtcNow
+                        };
+
+                        // 5. Serializza l'evento
+                        var eventJson = JsonSerializer.Serialize(alertEvent);
+
+                        // 6. Produci il messaggio sul topic di allarme
+                        await _producer.ProduceAsync(_alertsTopicName,
+                            new Message<string, string>
+                            {
+                                Key = alertEvent.IdCarta, // Usa IdCarta come chiave per il partizionamento
+                                Value = eventJson
+                            },
+                            stoppingToken);
+
+                        _logger.LogWarning(
+                            "*** ALLARME FRODE RILEVATO e pubblicato su {Topic} *** Carta: {IdCarta}",
+                            _alertsTopicName,
+                            loyaltyEvent.IdCarta);
                     }
                 }
                 catch (OperationCanceledException)
