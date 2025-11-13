@@ -29,7 +29,7 @@ namespace Retail.CouponEngine
             _producer = producer; // <-- 4. Assegna producer
 
             var topic = configuration["Kafka:TopicName"];
-            var couponTopicName = configuration["Kafka:TopicNameCouponGenerati"]!; // <-- 5. Leggi nome topic output
+            _couponTopicName = configuration["Kafka:TopicNameCoupons"]!; // <-- 5. Leggi nome topic output
 
             // Carica la configurazione del consumer Kafka
             var kafkaConfig = new ConsumerConfig

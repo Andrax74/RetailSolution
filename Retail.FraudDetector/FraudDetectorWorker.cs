@@ -38,8 +38,8 @@ namespace Retail.FraudDetector
             _consumer = consumer ?? throw new ArgumentNullException(nameof(consumer));
             _producer = producer ?? throw new ArgumentNullException(nameof(producer));
 
-            _alertsTopicName = configuration["Kafka:AlertsTopicName"]
-                ?? throw new ArgumentException("Kafka:AlertsTopicName mancante nella configurazione.");
+            _alertsTopicName = configuration["Kafka:TopicNameAlerts"]
+                ?? throw new ArgumentException("Kafka:TopicNameAlerts mancante nella configurazione.");
 
             _maxTransactions = configuration.GetValue<int>("FraudDetector:MaxTransactions");
             _windowSeconds = configuration.GetValue<int>("FraudDetector:TimeWindowSeconds");

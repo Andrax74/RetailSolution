@@ -30,7 +30,7 @@ namespace Retail.NotificationService.Services
                 return ("mario.rossi@email.com", "+393331234567");
             }
 
-            return ("cliente.sconosciuto@email.com", null); // Non abbiamo il telefono
+            return ("info@xantrix.it", null); // Non abbiamo il telefono
         }
     }
 }
